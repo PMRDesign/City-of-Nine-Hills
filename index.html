@@ -1,0 +1,105 @@
+<!doctype html>
+const v = map[idx(x,y)];
+if(v===1){ // ground (two-tone for 8-bit look)
+const px = x*TILE, py = y*TILE;
+ctx.fillStyle = getShade(px,py) ? getCSS('--ground1') : getCSS('--ground2');
+ctx.fillRect(px,py,TILE,TILE);
+// top highlight
+if(getTile(x,y-1)===0){ ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fillRect(px,py,TILE,3); }
+}
+else if(v===2){ // skyline block
+const px = x*TILE, py = y*TILE;
+ctx.fillStyle = 'rgba(60,53,95,0.35)';
+ctx.fillRect(px,py,TILE,TILE);
+}
+}
+}
+
+
+// keys
+for(const k of keys){
+if(k.got) continue;
+drawKey(k.x-6, k.y-10);
+}
+
+
+// player (simple 8-bit sprite block)
+drawPlayer(Math.floor(player.x), Math.floor(player.y), player.facing);
+
+
+// particles
+for(const p of particles){ p.age += 1/60; p.x += p.vx/60; p.y += p.vy/60; p.vx *= 0.98; p.vy *= 0.98; }
+for(const p of particles){ if(p.age<p.life){ ctx.fillStyle = 'rgba(255,211,77,'+(1-p.age/p.life)+')'; ctx.fillRect(Math.floor(p.x)-1, Math.floor(p.y)-1, 3,3); } }
+while(particles.length && particles[0].age>particles[0].life) particles.shift();
+
+
+ctx.restore();
+}
+
+
+function overlay(title, subtitle){
+ctx.save();
+ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0,0,VIEW_W,VIEW_H);
+ctx.fillStyle = '#fff'; ctx.textAlign='center';
+ctx.font = '700 18px system-ui, sans-serif'; ctx.fillText(title, VIEW_W/2, VIEW_H/2 - 6);
+ctx.font = '500 12px system-ui, sans-serif'; ctx.fillText(subtitle, VIEW_W/2, VIEW_H/2 + 16);
+ctx.restore();
+}
+
+
+// --- Tiny 8-bit drawings ---
+function getCSS(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function getShade(x,y){ return ((x>>4)+(y>>4)) % 2 === 0; }
+
+
+function drawKey(x,y){
+ctx.fillStyle = getCSS('--key');
+// simple pixel key: 12x8
+const px = [
+'..xxxx....',
+'..x..x....',
+'..xxxx..x.',
+'....x..x..',
+'....xxxx..'
+];
+for(let r=0;r<px.length;r++){
+for(let c=0;c<px[r].length;c++) if(px[r][c]==='x') ctx.fillRect(x+c,y+r,1,1);
+}
+// glow
+ctx.globalAlpha=0.35; ctx.fillRect(x-2,y-2,px[0].length+4,px.length+4); ctx.globalAlpha=1;
+}
+
+
+function drawPlayer(x,y,dir){
+// 12x14 blocky hero
+ctx.fillStyle = getCSS('--player');
+const sprite = [
+'..xxxxxx..',
+'.xxxxxxxx.',
+'.xx..xx.xx',
+'.xxxxxxxx.',
+'..xxxxxx..',
+'..xxx.xx..',
+'..xxxxxx..',
+'..x.xx.x..',
+'..x.xx.x..',
+'..x....x..',
+'..x....x..',
+'..x....x..',
+'.xx....xx.',
+'xx......xx',
+];
+for(let r=0;r<sprite.length;r++){
+for(let c=0;c<sprite[r].length;c++) if(sprite[r][c]==='x'){
+const cx = dir===1 ? c : (sprite[r].length-1-c);
+ctx.fillRect(x+cx, y+r, 1, 1);
+}
+}
+}
+
+
+// Splash screen
+draw(); overlay('City of Nine Hills','Press Start to begin.');
+</script>
+</body>
+</html>
