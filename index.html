@@ -1,105 +1,402 @@
 <!doctype html>
-const v = map[idx(x,y)];
-if(v===1){ // ground (two-tone for 8-bit look)
-const px = x*TILE, py = y*TILE;
-ctx.fillStyle = getShade(px,py) ? getCSS('--ground1') : getCSS('--ground2');
-ctx.fillRect(px,py,TILE,TILE);
-// top highlight
-if(getTile(x,y-1)===0){ ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fillRect(px,py,TILE,3); }
-}
-else if(v===2){ // skyline block
-const px = x*TILE, py = y*TILE;
-ctx.fillStyle = 'rgba(60,53,95,0.35)';
-ctx.fillRect(px,py,TILE,TILE);
-}
-}
-}
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>City of Nine Hills — 8‑bit Platformer</title>
+  <style>
+    :root {
+      --bg: #1b1630;      /* night sky */
+      --fg: #f0f4ff;
+      --sky1: #2a2450;
+      --sky2: #1b1630;
+      --city: #3c355f;    /* skyline */
+      --ground1: #2e8b57; /* slopes */
+      --ground2: #206b42; /* shadow */
+      --key: #ffd34d;
+      --player: #8be9fd;
+      --accent: #a78bfa;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; background: radial-gradient(1200px 800px at 50% 40%, var(--sky1), var(--sky2)); color: var(--fg); font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif; }
+    .wrap { display:grid; place-items:center; min-height:100%; padding:16px; }
+    .panel { width:min(980px,100%); background: rgba(255,255,255,0.04); border-radius: 18px; box-shadow: 0 10px 30px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(255,255,255,0.06); }
+    header { display:flex; justify-content:space-between; align-items:center; padding: 10px 14px; }
+    h1 { margin:0; font-size: clamp(18px,3.2vw,26px); letter-spacing:.3px; }
+    .btns { display:flex; gap:8px; }
+    button { appearance:none; border:0; cursor:pointer; border-radius: 999px; padding:10px 14px; font-weight:700; color:#13111a; background: linear-gradient(135deg, var(--accent), #6ee7ff); box-shadow: 0 8px 20px rgba(130,180,255,0.25); }
+    button.secondary { background: transparent; color: var(--fg); border:1px solid rgba(255,255,255,0.2); }
+    .hud { display:flex; gap:16px; justify-content:space-between; align-items:center; padding: 6px 14px; font-variant-numeric: tabular-nums; opacity:.95; }
+    .hud .left { display:flex; gap:16px; }
+    .kbd { display:inline-grid; place-items:center; width: 24px; height: 24px; border-radius:6px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); font-size: 12px; margin: 0 2px; }
 
+    /* Pixel-perfect canvas scaling */
+    .stage { position:relative; padding: 8px 14px 14px; }
+    canvas { display:block; width:100%; height:auto; image-rendering: pixelated; image-rendering: crisp-edges; border-radius: 14px; background: linear-gradient(#0e0b1a, #141129); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06); }
 
-// keys
-for(const k of keys){
-if(k.got) continue;
-drawKey(k.x-6, k.y-10);
-}
+    footer { opacity:.75; font-size:12px; text-align:center; padding: 10px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="panel">
+      <header>
+        <h1>🗝️ City of Nine Hills <span style="opacity:.6;font-weight:600;font-size:.8em">(NES‑style HTML5 platformer)</span></h1>
+        <div class="btns">
+          <button id="btnStart">Start / Restart</button>
+          <button id="btnPause" class="secondary">Pause</button>
+        </div>
+      </header>
+      <div class="hud">
+        <div class="left">
+          <div>Keys: <span id="keys">0</span>/9</div>
+          <div>Time: <span id="time">0.0</span>s</div>
+        </div>
+        <div>Controls: <span class="kbd">←</span><span class="kbd">→</span> or <span class="kbd">A</span><span class="kbd">D</span> • Jump: <span class="kbd">Z</span>/<span class="kbd">↑</span>/<span class="kbd">Space</span></div>
+      </div>
+      <div class="stage">
+        <!-- Internal resolution is tiny for 8‑bit feel; CSS upscales it. -->
+        <canvas id="game" width="480" height="270" aria-label="City of Nine Hills game area"></canvas>
+      </div>
+      <footer>
+        Collect all 9 hilltop keys to beat the game. Single-file, asset‑free. Push to GitHub and enable Pages to play in browser.
+      </footer>
+    </div>
+  </div>
 
+  <script>
+  // City of Nine Hills — tiny 8-bit style platformer in one HTML file.
+  // Level is auto-generated: 9 stepped hills with keys on the tops.
 
-// player (simple 8-bit sprite block)
-drawPlayer(Math.floor(player.x), Math.floor(player.y), player.facing);
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
 
+  const ui = {
+    keys: document.getElementById('keys'),
+    time: document.getElementById('time'),
+    btnStart: document.getElementById('btnStart'),
+    btnPause: document.getElementById('btnPause'),
+  };
 
-// particles
-for(const p of particles){ p.age += 1/60; p.x += p.vx/60; p.y += p.vy/60; p.vx *= 0.98; p.vy *= 0.98; }
-for(const p of particles){ if(p.age<p.life){ ctx.fillStyle = 'rgba(255,211,77,'+(1-p.age/p.life)+')'; ctx.fillRect(Math.floor(p.x)-1, Math.floor(p.y)-1, 3,3); } }
-while(particles.length && particles[0].age>particles[0].life) particles.shift();
+  // --- World setup ---
+  const TILE = 16;                // pixels per tile in internal resolution
+  const VIEW_W = canvas.width;    // 480
+  const VIEW_H = canvas.height;   // 270
+  const GRAVITY = 900;            // px/s^2 (internal)
+  const FRICTION = 0.82;
 
+  const state = {
+    running: false,
+    paused: false,
+    t0: 0,
+    last: 0,
+    time: 0,
+    collected: 0,
+    camX: 0,
+  };
 
-ctx.restore();
-}
+  // Tilemap: build a long city with 9 hills
+  const hills = 9;
+  const chunk = 28; // tiles per hill segment (approx)
+  const MAP_W = hills * chunk + 20; // tail
+  const MAP_H = 18; // 18 tiles tall -> 288px
+  const map = new Uint8Array(MAP_W * MAP_H); // 0=empty,1=ground,2=skyline
 
+  // Helpers
+  const idx = (x,y)=> y*MAP_W + x;
+  function setTile(x,y,v){ if(x>=0&&x<MAP_W&&y>=0&&y<MAP_H) map[idx(x,y)] = v; }
+  function getTile(x,y){ if(x<0||x>=MAP_W||y<0||y>=MAP_H) return 1; return map[idx(x,y)]; }
 
-function overlay(title, subtitle){
-ctx.save();
-ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0,0,VIEW_W,VIEW_H);
-ctx.fillStyle = '#fff'; ctx.textAlign='center';
-ctx.font = '700 18px system-ui, sans-serif'; ctx.fillText(title, VIEW_W/2, VIEW_H/2 - 6);
-ctx.font = '500 12px system-ui, sans-serif'; ctx.fillText(subtitle, VIEW_W/2, VIEW_H/2 + 16);
-ctx.restore();
-}
+  // Build flat ground base and skyline backdrop columns
+  function buildBase(){
+    const groundY = MAP_H-3; // baseline
+    for(let x=0;x<MAP_W;x++){
+      // skyline silhouette
+      const h = 5 + (x*997 % 7); // fake skyline variation
+      for(let y=0;y<groundY-h-6;y++) setTile(x,y,0);
+      for(let y=groundY-h-6;y<groundY-6;y++) setTile(x,y,2);
+      // ground base
+      for(let y=groundY;y<MAP_H;y++) setTile(x,y,1);
+      setTile(x,groundY-1,1);
+    }
+  }
 
+  // Build stepped hills and place keys on the tips
+  const keys = [];
+  function buildHills(){
+    const baseY = MAP_H-4; // one tile above the bottom line
+    let cursor = 6;
+    for(let i=0;i<hills;i++){
+      const width = 10 + (i%3)*2;      // hill footprint width (tiles)
+      const height = 5 + (i%4);        // steps to the top
+      const stepWidth = Math.max(2, Math.floor(width/height));
+      // left ramp up
+      for(let s=0;s<height;s++){
+        const y = baseY - s;
+        const start = cursor + s*stepWidth;
+        const end = cursor + width - s*stepWidth;
+        for(let x=start; x<end; x++) setTile(x,y,1);
+      }
+      // fill interior beneath
+      for(let y=baseY+1; y<MAP_H; y++){
+        for(let x=cursor; x<cursor+width; x++) setTile(x,y,1);
+      }
+      // top tile where the key sits
+      const topY = baseY - (height-1);
+      const topX = cursor + Math.floor(width/2);
+      keys.push({x: (topX+0.5)*TILE, y: (topY-1)*TILE, got:false});
+      cursor += width + 8; // gap to next hill
+    }
+  }
 
-// --- Tiny 8-bit drawings ---
-function getCSS(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
-function getShade(x,y){ return ((x>>4)+(y>>4)) % 2 === 0; }
+  buildBase();
+  buildHills();
 
+  // --- Player ---
+  const player = {
+    x: 32, y: (MAP_H-5)*TILE,
+    w: 10, h: 14,
+    vx: 0, vy: 0,
+    speed: 140, jump: 300,
+    grounded: false,
+    facing: 1,
+  };
 
-function drawKey(x,y){
-ctx.fillStyle = getCSS('--key');
-// simple pixel key: 12x8
-const px = [
-'..xxxx....',
-'..x..x....',
-'..xxxx..x.',
-'....x..x..',
-'....xxxx..'
-];
-for(let r=0;r<px.length;r++){
-for(let c=0;c<px[r].length;c++) if(px[r][c]==='x') ctx.fillRect(x+c,y+r,1,1);
-}
-// glow
-ctx.globalAlpha=0.35; ctx.fillRect(x-2,y-2,px[0].length+4,px.length+4); ctx.globalAlpha=1;
-}
+  // --- Input ---
+  const keysDown = new Set();
+  window.addEventListener('keydown', e=>{
+    if(['ArrowLeft','ArrowRight','a','d','A','D',' ','z','Z','w','W','ArrowUp'].includes(e.key)) e.preventDefault();
+    keysDown.add(e.key);
+    if([' ','z','Z','ArrowUp','w','W'].includes(e.key)) tryJump();
+  }, {passive:false});
+  window.addEventListener('keyup', e=> keysDown.delete(e.key));
 
+  function moveDir(){
+    let d=0; if(keysDown.has('ArrowLeft')||keysDown.has('a')||keysDown.has('A')) d-=1;
+    if(keysDown.has('ArrowRight')||keysDown.has('d')||keysDown.has('D')) d+=1; return d;
+  }
+  function tryJump(){
+    if(player.grounded){ player.vy = -player.jump; player.grounded=false; }
+  }
 
-function drawPlayer(x,y,dir){
-// 12x14 blocky hero
-ctx.fillStyle = getCSS('--player');
-const sprite = [
-'..xxxxxx..',
-'.xxxxxxxx.',
-'.xx..xx.xx',
-'.xxxxxxxx.',
-'..xxxxxx..',
-'..xxx.xx..',
-'..xxxxxx..',
-'..x.xx.x..',
-'..x.xx.x..',
-'..x....x..',
-'..x....x..',
-'..x....x..',
-'.xx....xx.',
-'xx......xx',
-];
-for(let r=0;r<sprite.length;r++){
-for(let c=0;c<sprite[r].length;c++) if(sprite[r][c]==='x'){
-const cx = dir===1 ? c : (sprite[r].length-1-c);
-ctx.fillRect(x+cx, y+r, 1, 1);
-}
-}
-}
+  // --- Game flow ---
+  ui.btnStart.addEventListener('click', startGame);
+  ui.btnPause.addEventListener('click', ()=>{ if(!state.running) return; state.paused=!state.paused; ui.btnPause.textContent = state.paused?'Resume':'Pause'; if(!state.paused) state.last=performance.now(); });
 
+  function startGame(){
+    // reset keys
+    for(const k of keys) k.got=false;
+    state.collected = 0; ui.keys.textContent = '0';
+    state.time = 0; ui.time.textContent = '0.0';
+    player.x = 32; player.y = (MAP_H-6)*TILE; player.vx=0; player.vy=0; player.grounded=false; player.facing=1;
+    state.running=true; state.paused=false; ui.btnPause.textContent='Pause';
+    state.t0 = performance.now(); state.last = state.t0; loop(state.t0);
+  }
 
-// Splash screen
-draw(); overlay('City of Nine Hills','Press Start to begin.');
-</script>
+  function loop(t){
+    if(!state.running) return;
+    if(state.paused){ draw(true); requestAnimationFrame(loop); return; }
+    const dt = Math.min(0.032, (t - state.last)/1000);
+    state.last = t; state.time = (t - state.t0)/1000; ui.time.textContent = state.time.toFixed(1);
+    update(dt); draw();
+    requestAnimationFrame(loop);
+  }
+
+  // --- Particles ---
+  const particles = [];
+  function sparkle(x,y){
+    for(let i=0;i<14;i++){
+      const a = Math.random()*Math.PI*2, s = 30+Math.random()*80;
+      particles.push({x,y, vx:Math.cos(a)*s, vy:Math.sin(a)*s, life:0.6+Math.random()*0.6, age:0});
+    }
+  }
+
+  // --- Physics & collisions ---
+  function rectVsWorld(px, py, w, h){
+    // Sample the four corners against solid tiles (1)
+    function solidAt(x,y){ return getTile(Math.floor(x/TILE), Math.floor(y/TILE)) === 1; }
+    return {
+      left: solidAt(px, py) || solidAt(px, py+h-1),
+      right: solidAt(px+w, py) || solidAt(px+w, py+h-1),
+      top: solidAt(px, py) || solidAt(px+w-1, py),
+      bottom: solidAt(px, py+h) || solidAt(px+w-1, py+h)
+    };
+  }
+
+  function update(dt){
+    // input
+    const d = moveDir();
+    player.vx += d * 900 * dt; // acceleration
+    player.vx *= player.grounded ? FRICTION : 0.98;
+    if(Math.abs(player.vx) < 8) player.vx = 0;
+    if(d) player.facing = Math.sign(d);
+
+    // gravity
+    player.vy += GRAVITY * dt;
+
+    // integrate X then resolve
+    player.x += player.vx * dt;
+    let col = rectVsWorld(player.x, player.y, player.w, player.h);
+    if(col.left && player.vx < 0){ player.x = Math.floor(player.x/TILE)*TILE + 1; player.vx = 0; }
+    if(col.right && player.vx > 0){ player.x = Math.floor((player.x+player.w)/TILE)*TILE - player.w - 1; player.vx = 0; }
+
+    // integrate Y then resolve
+    player.y += player.vy * dt; player.grounded=false;
+    col = rectVsWorld(player.x, player.y, player.w, player.h);
+    if(col.top && player.vy < 0){ player.y = Math.floor(player.y/TILE)*TILE + 1; player.vy = 0; }
+    if(col.bottom && player.vy > 0){ player.y = Math.floor((player.y+player.h)/TILE)*TILE - player.h - 1; player.vy = 0; player.grounded=true; }
+
+    // clamp to world bounds
+    const worldW = MAP_W*TILE; const worldH = MAP_H*TILE;
+    player.x = Math.max(0, Math.min(worldW-player.w-1, player.x));
+    player.y = Math.min(worldH-player.h-1, player.y);
+
+    // camera follow
+    const target = player.x + player.w/2 - VIEW_W/2;
+    state.camX += (target - state.camX) * 0.08;
+    state.camX = Math.max(0, Math.min(worldW - VIEW_W, state.camX));
+
+    // collect keys
+    for(const k of keys){
+      if(k.got) continue;
+      const dx = (player.x+player.w/2) - k.x; const dy = (player.y) - k.y;
+      if(dx*dx + dy*dy < 14*14){ k.got=true; state.collected++; ui.keys.textContent = String(state.collected); sparkle(k.x, k.y); }
+    }
+
+    // particles update & cull
+    for(let i=particles.length-1;i>=0;i--){
+      const p = particles[i];
+      p.age += dt; p.x += p.vx*dt; p.y += p.vy*dt; p.vx *= 0.98; p.vy *= 0.98;
+      if(p.age >= p.life) particles.splice(i,1);
+    }
+
+    // win condition
+    if(state.collected === 9){ state.running=false; draw(); overlay('You found all 9 keys!','Press Start to play again.'); }
+  }
+
+  function drawBackground(camX){
+    // parallax skyline
+    ctx.fillStyle = '#0c0a18'; ctx.fillRect(0,0,VIEW_W,VIEW_H);
+    // distant city blocks
+    ctx.fillStyle = 'rgba(167,139,250,0.1)';
+    for(let i=0;i<24;i++){
+      const bx = Math.floor((i*120 - camX*0.3) % (VIEW_W+140)) - 70;
+      const bh = 40 + (i*73 % 70);
+      ctx.fillRect(bx, VIEW_H-90 - bh, 40, bh);
+    }
+    // ground gradient strip
+    const g = ctx.createLinearGradient(0, VIEW_H-80, 0, VIEW_H);
+    g.addColorStop(0,'rgba(32,107,66,0.3)'); g.addColorStop(1,'rgba(32,107,66,0.05)');
+    ctx.fillStyle = g; ctx.fillRect(0, VIEW_H-80, VIEW_W, 80);
+  }
+
+  function draw(dimmed=false){
+    ctx.save();
+    drawBackground(state.camX);
+
+    // world
+    ctx.translate(-Math.floor(state.camX), 0);
+
+    // tiles
+    for(let y=0;y<MAP_H;y++){
+      for(let x=0;x<MAP_W;x++){
+        const v = map[idx(x,y)];
+        if(v===1){ // ground (two-tone for 8-bit look)
+          const px = x*TILE, py = y*TILE;
+          ctx.fillStyle = getShade(px,py) ? getCSS('--ground1') : getCSS('--ground2');
+          ctx.fillRect(px,py,TILE,TILE);
+          // top highlight
+          if(getTile(x,y-1)===0){ ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fillRect(px,py,TILE,3); }
+        }
+        else if(v===2){ // skyline block
+          const px = x*TILE, py = y*TILE;
+          ctx.fillStyle = 'rgba(60,53,95,0.35)';
+          ctx.fillRect(px,py,TILE,TILE);
+        }
+      }
+    }
+
+    // keys
+    for(const k of keys){
+      if(k.got) continue;
+      drawKey(k.x-6, k.y-10);
+    }
+
+    // player (simple 8-bit sprite block)
+    drawPlayer(Math.floor(player.x), Math.floor(player.y), player.facing);
+
+    // particles draw
+    for(const p of particles){
+      const a = 1 - (p.age / p.life);
+      if(a <= 0) continue;
+      ctx.fillStyle = 'rgba(255,211,77,'+a.toFixed(3)+')';
+      ctx.fillRect(Math.floor(p.x)-1, Math.floor(p.y)-1, 3,3);
+    }
+
+    ctx.restore();
+    if(dimmed) overlay('Paused','Press Pause to resume.');
+  }
+
+  function overlay(title, subtitle){
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0,0,VIEW_W,VIEW_H);
+    ctx.fillStyle = '#fff'; ctx.textAlign='center';
+    ctx.font = '700 18px system-ui, sans-serif'; ctx.fillText(title, VIEW_W/2, VIEW_H/2 - 6);
+    ctx.font = '500 12px system-ui, sans-serif'; ctx.fillText(subtitle, VIEW_W/2, VIEW_H/2 + 16);
+    ctx.restore();
+  }
+
+  // --- Tiny 8-bit drawings ---
+  function getCSS(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  function getShade(x,y){ return ((x>>4)+(y>>4)) % 2 === 0; }
+
+  function drawKey(x,y){
+    ctx.fillStyle = getCSS('--key');
+    // simple pixel key: 12x8
+    const px = [
+      '..xxxx....',
+      '..x..x....',
+      '..xxxx..x.',
+      '....x..x..',
+      '....xxxx..'
+    ];
+    for(let r=0;r<px.length;r++){
+      for(let c=0;c<px[r].length;c++) if(px[r][c]==='x') ctx.fillRect(x+c,y+r,1,1);
+    }
+    // glow
+    ctx.globalAlpha=0.35; ctx.fillRect(x-2,y-2,px[0].length+4,px.length+4); ctx.globalAlpha=1;
+  }
+
+  function drawPlayer(x,y,dir){
+    // 12x14 blocky hero
+    ctx.fillStyle = getCSS('--player');
+    const sprite = [
+      '..xxxxxx..',
+      '.xxxxxxxx.',
+      '.xx..xx.xx',
+      '.xxxxxxxx.',
+      '..xxxxxx..',
+      '..xxx.xx..',
+      '..xxxxxx..',
+      '..x.xx.x..',
+      '..x.xx.x..',
+      '..x....x..',
+      '..x....x..',
+      '..x....x..',
+      '.xx....xx.',
+      'xx......xx',
+    ];
+    for(let r=0;r<sprite.length;r++){
+      for(let c=0;c<sprite[r].length;c++) if(sprite[r][c]==='x'){
+        const cx = dir===1 ? c : (sprite[r].length-1-c);
+        ctx.fillRect(x+cx, y+r, 1, 1);
+      }
+    }
+  }
+
+  // Splash screen
+  draw(); overlay('City of Nine Hills','Press Start to begin.');
+  </script>
 </body>
 </html>
